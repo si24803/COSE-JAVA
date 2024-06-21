@@ -20,16 +20,17 @@ import java.util.Arrays;
 public abstract class SignCommon extends Message {
     protected String contextString;
 
-    byte[] computeSignature(byte[] rgbToBeSigned, OneKey cnKey, String provider) throws CoseException {
+    byte[] computeSignature(byte[] rgbToBeSigned, OneKey cnKey) throws CoseException {
         AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
-        return computeSignature(alg, rgbToBeSigned, cnKey, provider);
+        return computeSignature(alg, rgbToBeSigned, cnKey, (String) null);
     }
 
-    static byte[] computeSignature(AlgorithmID alg, byte[] rgbToBeSigned, OneKey cnKey, String provider)
+    static byte[] computeSignature(AlgorithmID alg, byte[] rgbToBeSigned, OneKey cnKey)
             throws CoseException {
         String algName = null;
         int sigLen = 0;
 
+        String provider = null;
         switch (alg) {
             case ECDSA_256:
                 algName = "SHA256withECDSA";
@@ -119,18 +120,18 @@ public abstract class SignCommon extends Message {
         return concat;
     }
 
-    boolean validateSignature(byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey, String provider)
+    boolean validateSignature(byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey)
             throws CoseException {
         AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
-        return validateSignature(alg, rgbToBeSigned, rgbSignature, cnKey, provider);
+        return validateSignature(alg, rgbToBeSigned, rgbSignature, cnKey, (String) null);
     }
 
-    static boolean validateSignature(AlgorithmID alg, byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey,
-            String provider)
+    static boolean validateSignature(AlgorithmID alg, byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey)
             throws CoseException {
         String algName = null;
         boolean convert = false;
 
+        String provider = null;
         switch (alg) {
             case ECDSA_256:
                 algName = "SHA256withECDSA";
@@ -147,7 +148,7 @@ public abstract class SignCommon extends Message {
 
             case EDDSA:
                 algName = "NonewithEdDSA";
-                // provider = "EdDSA";
+                provider = "EdDSA";
                 break;
 
             case RSA_PSS_256:
@@ -193,12 +194,65 @@ public abstract class SignCommon extends Message {
     // New code to support specifying crypto provider by String (if installed) or
     // Provider (if not installed)
 
-    byte[] computeSignature(byte[] rgbToBeSigned, OneKey cnKey) throws CoseException {
-        return computeSignature(rgbToBeSigned, cnKey, null);
+    byte[] computeSignature(byte[] rgbToBeSigned, OneKey cnKey, String provider) throws CoseException {
+        AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
+        return computeSignature(alg, rgbToBeSigned, cnKey, provider);
     }
 
-    static byte[] computeSignature(AlgorithmID alg, byte[] rgbToBeSigned, OneKey cnKey) throws CoseException {
-        return computeSignature(alg, rgbToBeSigned, cnKey, (String) null);
+    static byte[] computeSignature(AlgorithmID alg, byte[] rgbToBeSigned, OneKey cnKey, String provider)
+            throws CoseException {
+        String algName = null;
+        int sigLen = 0;
+
+        switch (alg) {
+            case ECDSA_256:
+                algName = "SHA256withECDSA";
+                sigLen = 32;
+                break;
+            case ECDSA_384:
+                algName = "SHA384withECDSA";
+                sigLen = 48;
+                break;
+            case ECDSA_512:
+                algName = "SHA512withECDSA";
+                sigLen = 66;
+                break;
+            case EDDSA:
+                algName = "NonewithEdDSA";
+                // provider = "EdDSA";
+                break;
+
+            case RSA_PSS_256:
+                algName = "SHA256withRSA/PSS";
+                break;
+
+            case RSA_PSS_384:
+                algName = "SHA384withRSA/PSS";
+                break;
+
+            case RSA_PSS_512:
+                algName = "SHA512withRSA/PSS";
+                break;
+
+            default:
+                throw new CoseException("Unsupported Algorithm Specified");
+        }
+
+        if (cnKey == null) {
+            throw new NullPointerException();
+        }
+
+        PrivateKey privKey = cnKey.AsPrivateKey();
+        if (privKey == null) {
+            throw new CoseException("Private key required to sign");
+        }
+
+        return computeSignature(privKey, rgbToBeSigned, sigLen, algName, provider);
+    }
+
+    byte[] computeSignature(byte[] rgbToBeSigned, OneKey cnKey, Provider provider) throws CoseException {
+        AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
+        return computeSignature(alg, rgbToBeSigned, cnKey, provider);
     }
 
     static byte[] computeSignature(AlgorithmID alg, byte[] rgbToBeSigned, OneKey cnKey, Provider provider)
@@ -320,13 +374,73 @@ public abstract class SignCommon extends Message {
         return result;
     }
 
-    boolean validateSignature(byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey) throws CoseException {
-        return validateSignature(rgbToBeSigned, rgbSignature, cnKey, null);
+    boolean validateSignature(byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey, String provider)
+            throws CoseException {
+        AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
+        return validateSignature(alg, rgbToBeSigned, rgbSignature, cnKey, provider);
     }
 
-    static boolean validateSignature(AlgorithmID alg, byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey)
+    static boolean validateSignature(AlgorithmID alg, byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey,
+            String provider)
             throws CoseException {
-        return validateSignature(alg, rgbToBeSigned, rgbSignature, cnKey, (String) null);
+        String algName = null;
+        boolean convert = false;
+
+        switch (alg) {
+            case ECDSA_256:
+                algName = "SHA256withECDSA";
+                convert = true;
+                break;
+            case ECDSA_384:
+                algName = "SHA384withECDSA";
+                convert = true;
+                break;
+            case ECDSA_512:
+                algName = "SHA512withECDSA";
+                convert = true;
+                break;
+
+            case EDDSA:
+                algName = "NonewithEdDSA";
+                // provider = "EdDSA";
+                break;
+
+            case RSA_PSS_256:
+                algName = "SHA256withRSA/PSS";
+                break;
+
+            case RSA_PSS_384:
+                algName = "SHA384withRSA/PSS";
+                break;
+
+            case RSA_PSS_512:
+                algName = "SHA512withRSA/PSS";
+                break;
+
+            default:
+                throw new CoseException("Unsupported Algorithm Specified");
+        }
+
+        if (cnKey == null) {
+            throw new NullPointerException();
+        }
+
+        PublicKey pubKey = cnKey.AsPublicKey();
+        if (pubKey == null) {
+            throw new CoseException("Public key required to verify");
+        }
+
+        if (convert) {
+            rgbSignature = convertConcatToDer(rgbSignature);
+        }
+
+        return validateSignature(pubKey, algName, rgbToBeSigned, rgbSignature, provider);
+    }
+
+    boolean validateSignature(byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey, Provider provider)
+            throws CoseException {
+        AlgorithmID alg = AlgorithmID.FromCBOR(findAttribute(HeaderKeys.Algorithm));
+        return validateSignature(alg, rgbToBeSigned, rgbSignature, cnKey, provider);
     }
 
     static boolean validateSignature(AlgorithmID alg, byte[] rgbToBeSigned, byte[] rgbSignature, OneKey cnKey,
